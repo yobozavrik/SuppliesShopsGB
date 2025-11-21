@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Галя Балувана - Замовлення</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body { background-color: #fdf2f2; font-family: 'Nunito', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .slide-up-enter-active, .slide-up-leave-active { transition: all 0.3s ease-out; }
+        .slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); opacity: 0; }
+        .btn-qty:active { transform: scale(0.95); }
+        
+        /* Анимация загрузки */
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #dc2626; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="app" class="max-w-md mx-auto bg-white min-h-screen shadow-2xl flex flex-col relative overflow-hidden">
+
+    <!-- ==================== ЭКРАН ЗАГРУЗКИ ==================== -->
+    <div v-if="state === 'LOADING'" class="flex-1 flex flex-col items-center justify-center bg-white z-50">
+        <div class="loader mb-4"></div>
+        <h2 class="text-gray-600 font-bold animate-pulse">Авторизація...</h2>
+        <p class="text-xs text-gray-400 mt-2">Перевіряємо ваші права доступу</p>
+    </div>
+
+    <!-- ==================== ЭКРАН: НЕТ ДОСТУПА ==================== -->
+    <div v-if="state === 'UNAUTHORIZED'" class="flex-1 flex flex-col items-center justify-center p-6 bg-red-50 text-center z-50">
+        <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6 text-red-500 text-3xl shadow-inner">
+            <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <h2 class="text-2xl font-extrabold text-gray-800 mb-2">Доступ заборонено</h2>
+        <p class="text-gray-600 mb-6">Ваш акаунт не знайдено в базі співробітників мережі.</p>
+        
+        <div class="bg-white p-4 rounded-xl border border-red-200 w-full shadow-sm mb-4">
+            <p class="text-xs text-gray-400 uppercase font-bold mb-1">Ваш ID:</p>
+            <code class="text-lg font-mono font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded select-all">{{ user.id }}</code>
+        </div>
+        
+        <p class="text-xs text-gray-400">Зробіть скріншот або скопіюйте ID та надішліть адміністратору, щоб вас додали до вашого магазину.</p>
+        <button @click="checkAuth" class="mt-8 text-red-600 font-bold hover:underline">Спробувати ще раз <i class="fa-solid fa-rotate-right"></i></button>
+    </div>
+
+    <!-- ==================== ОСНОВНОЕ ПРИЛОЖЕНИЕ (Если доступ есть) ==================== -->
+    <div v-if="state === 'APP'" class="flex flex-col h-full min-h-screen">
+        
+        <!-- ШАПКА -->
+        <div class="bg-white/90 backdrop-blur-md p-4 pt-6 z-20 sticky top-0 border-b border-red-50 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <!-- Кнопка Назад -->
+                    <button v-if="step > 1" @click="goBack" class="w-10 h-10 min-w-[40px] rounded-full bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 transition">
+                        <i class="fa-solid fa-arrow-left text-lg"></i>
+                    </button>
+                    <!-- Лого -->
+                    <div v-else class="w-10 h-10 min-w-[40px] rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white font-bold text-xl shadow-md">Г</div>
+                    
+                    <!-- Инфо -->
+                    <div class="flex flex-col truncate">
+                        <div class="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                            <i class="fa-solid fa-store text-red-400"></i> {{ storeName }}
+                        </div>
+                        <span v-if="selectedProduction" class="text-red-600 font-extrabold text-lg leading-none truncate">{{ selectedProduction }}</span>
+                        <span v-else class="text-gray-800 font-bold text-lg leading-none">Нове замовлення</span>
+                    </div>
+                </div>
+                <!-- Очистка -->
+                <button v-if="totalItems > 0" @click="clearCart" class="text-gray-400 hover:text-red-500 transition p-2">
+                    <i class="fa-regular fa-trash-can text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ШАГ 1: ЦЕХ -->
+        <div v-if="step === 1" class="p-6 flex flex-col justify-center flex-1 bg-gradient-to-b from-white to-red-50">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-extrabold text-gray-800 mb-2">Привіт, {{ user.first_name }}!</h2>
+                <p class="text-gray-500">Куди робимо замовлення?</p>
+            </div>
+            <div class="flex flex-col gap-4">
+                <button v-for="prod in productions" :key="prod" @click="selectProduction(prod)" class="group relative overflow-hidden bg-white border border-red-100 p-5 rounded-3xl shadow-sm hover:shadow-md transition-all duration-300 text-left flex items-center justify-between">
+                    <div class="absolute left-0 top-0 bottom-0 w-2 bg-red-500 group-hover:w-3 transition-all"></div>
+                    <span class="ml-4 text-xl font-bold text-gray-700 group-hover:text-red-600 transition">{{ prod }}</span>
+                    <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-400 group-hover:bg-red-500 group-hover:text-white transition"><i class="fa-solid fa-chevron-right"></i></div>
+                </button>
+            </div>
+        </div>
+
+        <!-- ШАГ 2: КАТЕГОРИИ -->
+        <div v-if="step === 2" class="p-4 flex flex-col flex-1 bg-gray-50">
+            <h2 class="text-center text-gray-500 mb-4 font-bold text-sm uppercase tracking-wider">Категорія</h2>
+            <div class="grid grid-cols-2 gap-3 pb-24">
+                <button v-for="cat in categoriesList" :key="cat.name" @click="selectCategory(cat.name)" class="bg-white border border-gray-100 rounded-3xl p-4 aspect-[4/3] flex flex-col items-center justify-center gap-2 shadow-sm active:scale-95 transition duration-200">
+                    <div class="text-3xl mb-1">{{ cat.icon }}</div>
+                    <span class="font-bold text-gray-700 text-center text-sm leading-tight">{{ cat.name }}</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ШАГ 3: ТОВАРЫ -->
+        <div v-if="step === 3" class="flex-1 flex flex-col bg-white">
+            <div class="bg-red-50 p-3 text-center sticky top-[85px] z-10 border-b border-red-100">
+                <span class="font-extrabold text-red-800 text-lg">{{ selectedCategory }}</span>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 pb-32">
+                <div v-for="product in filteredProducts" :key="product.id" class="mb-6 last:mb-0">
+                    <div class="flex justify-between items-start mb-3 pl-1">
+                        <h3 class="font-bold text-gray-800 text-lg leading-tight w-3/4">{{ product.name }}</h3>
+                        <div v-if="cart[product.id] > 0" class="bg-red-600 text-white font-bold text-sm px-3 py-1 rounded-full shadow-md">{{ cart[product.id] }} шт</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="addToCart(product.id, 1)" class="btn-qty flex-1 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm font-bold text-gray-600 hover:border-red-300 hover:text-red-600 hover:bg-red-50">+1</button>
+                        <button @click="addToCart(product.id, 5)" class="btn-qty flex-1 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm font-bold text-gray-600 hover:border-red-300 hover:text-red-600 hover:bg-red-50">+5</button>
+                        <button @click="addToCart(product.id, 10)" class="btn-qty flex-1 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm font-bold text-gray-600 hover:border-red-300 hover:text-red-600 hover:bg-red-50">+10</button>
+                    </div>
+                </div>
+                <div v-if="filteredProducts.length === 0" class="text-center text-gray-400 mt-12 flex flex-col items-center">
+                    <i class="fa-regular fa-folder-open text-4xl mb-2 opacity-50"></i>
+                    <p>Тут поки пусто</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- КНОПКА КОРЗИНЫ -->
+        <div v-if="totalItems > 0" class="fixed bottom-6 left-0 right-0 px-4 z-30 max-w-md mx-auto">
+            <button @click="isCartOpen = true" class="w-full bg-gray-900 text-white p-4 rounded-3xl shadow-2xl flex justify-between items-center transform transition active:scale-95">
+                <div class="flex items-center gap-3">
+                    <div class="bg-red-500 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-lg border-2 border-gray-900">{{ totalItems }}</div>
+                    <div class="text-left"><div class="text-xs text-gray-400 uppercase font-bold">Кошик</div><div class="font-bold">Оформити замовлення</div></div>
+                </div>
+                <i class="fa-solid fa-chevron-right text-gray-500"></i>
+            </button>
+        </div>
+
+        <!-- МОДАЛКА КОРЗИНЫ -->
+        <div v-if="isCartOpen" class="fixed inset-0 bg-black/60 z-50 flex justify-center items-end sm:items-center backdrop-blur-sm">
+            <div class="bg-white w-full max-w-md h-[92vh] sm:h-[85vh] sm:rounded-3xl rounded-t-3xl flex flex-col shadow-2xl overflow-hidden">
+                <div class="p-5 bg-white border-b border-gray-100 flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-extrabold text-gray-800">Ваш кошик</h2>
+                        <p class="text-xs text-gray-500 mt-1">Магазин: <b class="text-gray-800">{{ storeName }}</b></p>
+                    </div>
+                    <button @click="isCartOpen = false" class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 bg-gray-50">
+                    <div v-for="item in cartItems" :key="item.id" class="bg-white p-4 rounded-3xl shadow-sm mb-4 border border-gray-100 relative">
+                        <div class="pr-10">
+                            <div class="inline-block px-2 py-0.5 bg-red-50 text-red-500 text-[10px] font-bold uppercase rounded mb-2 tracking-wide">{{ item.category }}</div>
+                            <div class="font-bold text-gray-800 text-lg mb-4 leading-snug">{{ item.name }}</div>
+                        </div>
+                        <button @click="removeFromCart(item.id)" class="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition p-2"><i class="fa-solid fa-trash-can"></i></button>
+                        <div class="flex items-center justify-between bg-gray-50 rounded-2xl p-1.5 border border-gray-100">
+                            <button @click="addToCart(item.id, -1)" class="w-11 h-11 bg-white rounded-xl shadow-sm flex items-center justify-center text-gray-600 font-bold text-xl active:bg-gray-200 transition">-</button>
+                            <span class="font-bold text-xl w-12 text-center text-gray-800">{{ item.qty }}</span>
+                            <button @click="addToCart(item.id, 1)" class="w-11 h-11 bg-red-500 rounded-xl shadow-sm flex items-center justify-center text-white font-bold text-xl active:bg-red-600 transition">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-5 border-t bg-white pb-8">
+                    <button @click="submitOrder" :disabled="cartItems.length === 0 || isSending" class="w-full bg-red-600 disabled:bg-gray-300 text-white font-bold py-4 rounded-2xl shadow-lg shadow-red-200 active:scale-[0.98] transition text-lg flex justify-center items-center gap-3">
+                        <span v-if="!isSending">Відправити на {{ selectedProduction }}</span>
+                        <span v-else>Відправка... <i class="fa-solid fa-spinner fa-spin"></i></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- УВЕДОМЛЕНИЕ -->
+    <transition name="slide-up">
+        <div v-if="notification.show" class="fixed bottom-6 left-4 right-4 max-w-md mx-auto z-[60]">
+            <div class="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
+                <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-black font-bold"><i class="fa-solid fa-check"></i></div>
+                <div><h4 class="font-bold text-sm">Успішно!</h4><p class="text-xs text-gray-300">{{ notification.message }}</p></div>
+            </div>
+        </div>
+    </transition>
+
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    // ====================================================================================
+    // НАЛАШТУВАННЯ ПІДКЛЮЧЕННЯ ДО N8N
+    // ====================================================================================
+    const USE_MOCK_DATA = true; // <--- ПОСТАВ FALSE, КОГДА БУДЕШЬ ПОДКЛЮЧАТЬ РЕАЛЬНЫЙ N8N
+    const N8N_BASE_URL = 'http://localhost:5678/webhook'; // URL твоего локального n8n
+    // ====================================================================================
+
+    createApp({
+        data() {
+            return {
+                state: 'LOADING', // 'LOADING' | 'UNAUTHORIZED' | 'APP'
+                step: 1,
+                
+                user: { id: 0, first_name: 'Гість' }, // Данные юзера
+                storeName: '', // Название магазина из n8n
+                
+                productions: ['Гравітон', 'Садова', 'Флорида'],
+                categoriesList: [
+                    { name: 'Вареники', icon: '🥟' }, { name: 'Пельмені', icon: '🍲' }, { name: 'Млинці', icon: '🥞' },
+                    { name: 'Бендерики', icon: '🥪' }, { name: 'Котлети', icon: '🍖' }, { name: 'Сирники', icon: '🍩' },
+                    { name: 'Голубці', icon: '🥬' }, { name: 'Чебуреки', icon: '🥟' }, { name: 'Хінкалі', icon: '🥡' },
+                    { name: 'Зрази / Тісто', icon: '🥔' }, { name: 'Ковбаски', icon: '🌭' }, { name: 'Перець фарш.', icon: '🫑' },
+                    { name: 'Кулінарія / Інше', icon: '🐟' }
+                ],
+                products: [
+                    { id: 101, name: 'Вареники з шпинатом', category: 'Вареники' },
+                    { id: 102, name: 'Вареники з вишнею', category: 'Вареники' },
+                    { id: 103, name: 'Вареники з капустою', category: 'Вареники' },
+                    { id: 104, name: 'Вареники з картоплею', category: 'Вареники' },
+                    { id: 105, name: 'Вареники з картоплею і грибами', category: 'Вареники' },
+                    { id: 106, name: 'Вареники з лівером', category: 'Вареники' },
+                    { id: 107, name: 'Вареники з м\'ясом', category: 'Вареники' },
+                    { id: 108, name: 'Вареники з маком', category: 'Вареники' },
+                    { id: 109, name: 'Вареники з маслом і картоплею', category: 'Вареники' },
+                    { id: 110, name: 'Вареники з солодким сиром', category: 'Вареники' },
+                    { id: 111, name: 'Вареники з солоним сиром', category: 'Вареники' },
+                    { id: 112, name: 'Вареники з чорницею', category: 'Вареники' },
+                    { id: 113, name: 'Вареники з картоплею і сиром', category: 'Вареники' },
+                    { id: 201, name: 'Пельмені з телятиною', category: 'Пельмені' },
+                    { id: 202, name: 'Пельмені з свинини', category: 'Пельмені' },
+                    { id: 203, name: 'Пельмені з рибою', category: 'Пельмені' },
+                    { id: 204, name: 'Пельмені Свинина+Курятина', category: 'Пельмені' },
+                    { id: 205, name: 'Пельмені Свинина+Яловичина', category: 'Пельмені' },
+                    { id: 206, name: 'Пельмені з індиком', category: 'Пельмені' },
+                    { id: 207, name: 'Пельмені Три м\'яса', category: 'Пельмені' },
+                    { id: 208, name: 'Пельмені Малятко', category: 'Пельмені' },
+                    { id: 209, name: 'Пельмені Кукурудзяні з куркою', category: 'Пельмені' },
+                    { id: 210, name: 'Пельмені Козацькі', category: 'Пельмені' },
+                    { id: 301, name: 'Хінкалі з м\'ясом', category: 'Хінкалі' },
+                    { id: 302, name: 'Хінкалі з телятиною', category: 'Хінкалі' },
+                    { id: 401, name: 'Чебурек Кримський', category: 'Чебуреки' },
+                    { id: 402, name: 'Чебурек з м\'ясом', category: 'Чебуреки' },
+                    { id: 403, name: 'Чебурек Сир та зелень', category: 'Чебуреки' },
+                    { id: 404, name: 'Чебурек з куркою та моцарелою', category: 'Чебуреки' },
+                    { id: 405, name: 'Чебурек з картоплею', category: 'Чебуреки' },
+                    { id: 501, name: 'Ковбаски гриль свинні', category: 'Ковбаски' },
+                    { id: 502, name: 'Ковбаса домашня', category: 'Ковбаски' },
+                    { id: 601, name: 'Голубці з м\'ясом', category: 'Голубці' },
+                    { id: 602, name: 'Голубці з грибами', category: 'Голубці' },
+                    { id: 603, name: 'Голубці з куркою', category: 'Голубці' },
+                    { id: 604, name: 'Голубці Телятина + Яловичина', category: 'Голубці' },
+                    { id: 701, name: 'Котлета рибна (до посту)', category: 'Котлети' },
+                    { id: 702, name: 'Котлета куряча', category: 'Котлети' },
+                    { id: 703, name: 'Котлета рибна', category: 'Котлети' },
+                    { id: 704, name: 'Котлета зі свинини', category: 'Котлети' },
+                    { id: 705, name: 'Котлета індича', category: 'Котлети' },
+                    { id: 706, name: 'Котлета Бургерна', category: 'Котлети' },
+                    { id: 707, name: 'Котлета "Кордон Блю"', category: 'Котлети' },
+                    { id: 708, name: 'Котлета зі свинини і ялович.', category: 'Котлети' },
+                    { id: 709, name: 'Котлета Бургерна Куряча', category: 'Котлети' },
+                    { id: 710, name: 'Котлети "Дитячі"', category: 'Котлети' },
+                    { id: 711, name: 'Гречаники', category: 'Котлети' },
+                    { id: 712, name: 'Тефтелі класичні', category: 'Котлети' },
+                    { id: 713, name: 'Тефтелі рибні', category: 'Котлети' },
+                    { id: 714, name: 'Фрикадельки дитячі', category: 'Котлети' },
+                    { id: 715, name: 'Фрикадельки індичі', category: 'Котлети' },
+                    { id: 716, name: 'Фрикадельки курячі', category: 'Котлети' },
+                    { id: 801, name: 'Сирники', category: 'Сирники' },
+                    { id: 802, name: 'Сирники з бананом', category: 'Сирники' },
+                    { id: 803, name: 'Сирники з вишнею', category: 'Сирники' },
+                    { id: 804, name: 'Сирники з кокосом', category: 'Сирники' },
+                    { id: 805, name: 'Сирники з родзинками', category: 'Сирники' },
+                    { id: 806, name: 'Сирники з шоколадом', category: 'Сирники' },
+                    { id: 807, name: 'Сирні палички', category: 'Сирники' },
+                    { id: 808, name: 'Сирні кульки', category: 'Сирники' },
+                    { id: 901, name: 'Картопляні зрази з м\'ясом', category: 'Зрази / Тісто' },
+                    { id: 902, name: 'Картопляні зрази з лівером', category: 'Зрази / Тісто' },
+                    { id: 903, name: 'Картопляні зрази з грибами', category: 'Зрази / Тісто' },
+                    { id: 1001, name: 'Млинці з куркою та грибами', category: 'Млинці' },
+                    { id: 1002, name: 'Млинці з лівером', category: 'Млинці' },
+                    { id: 1003, name: 'Млинці з маком та вишнею', category: 'Млинці' },
+                    { id: 1004, name: 'Млинці з м\'ясом', category: 'Млинці' },
+                    { id: 1005, name: 'Млинці з полуницею та сиром', category: 'Млинці' },
+                    { id: 1006, name: 'М-ці з сиром та чорницею', category: 'Млинці' },
+                    { id: 1007, name: 'Мл-ці з сиром солодким', category: 'Млинці' },
+                    { id: 1008, name: 'Млинці шпинат з крем сиром', category: 'Млинці' },
+                    { id: 1009, name: 'Млинці з бананом та згущонкою', category: 'Млинці' },
+                    { id: 1010, name: 'Млинці Лососем + Шпинат', category: 'Млинці' },
+                    { id: 1011, name: 'Млинці Лососем + Сир', category: 'Млинці' },
+                    { id: 1012, name: 'Млинці з солоним сиром', category: 'Млинці' },
+                    { id: 1013, name: 'Млинці шинка та гол. сир', category: 'Млинці' },
+                    { id: 1014, name: 'Млинці Карамел. яблуко', category: 'Млинці' },
+                    { id: 1015, name: 'Млинці шоколад + вишня', category: 'Млинці' },
+                    { id: 1016, name: 'Млинці банан + сир + шоколад', category: 'Млинці' },
+                    { id: 1017, name: 'Млинці крем сир малинка', category: 'Млинці' },
+                    { id: 1018, name: 'Млинці крем сир манго', category: 'Млинці' },
+                    { id: 1019, name: 'Млинці шок банан', category: 'Млинці' },
+                    { id: 1101, name: 'Бендерики з куркою', category: 'Бендерики' },
+                    { id: 1102, name: 'Бендерики з м\'ясом', category: 'Бендерики' },
+                    { id: 1103, name: 'Бендерики з сиром', category: 'Бендерики' },
+                    { id: 1104, name: 'Бендерики шпинатні з сиром', category: 'Бендерики' },
+                    { id: 1201, name: 'Скумбрія фарширована', category: 'Кулінарія / Інше' },
+                    { id: 1202, name: 'Торт печінковий', category: 'Кулінарія / Інше' },
+                    { id: 1203, name: 'Торт печінковий з сиром', category: 'Кулінарія / Інше' },
+                    { id: 1204, name: 'Бедра курячі фаршировані', category: 'Кулінарія / Інше' },
+                    { id: 1205, name: 'Паштет індичий', category: 'Кулінарія / Інше' },
+                    { id: 1206, name: 'Паштет курячий', category: 'Кулінарія / Інше' },
+                    { id: 1207, name: 'Паштет свинний', category: 'Кулінарія / Інше' },
+                    { id: 1301, name: 'Перець фарширований грибами', category: 'Перець фарш.' },
+                    { id: 1302, name: 'Перець фарширований м\'ясом', category: 'Перець фарш.' },
+                ],
+                selectedProduction: '',
+                selectedCategory: '',
+                isCartOpen: false,
+                isSending: false,
+                cart: {},
+                notification: { show: false, message: '' }
+            }
+        },
+        mounted() {
+            // Инициализация Телеграма
+            if (window.Telegram && window.Telegram.WebApp) {
+                const tg = window.Telegram.WebApp;
+                tg.ready();
+                tg.expand(); 
+                // Если открыли в Телеграме, берем реальные данные
+                if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                    this.user = tg.initDataUnsafe.user;
+                } else {
+                    // Если тестируем в браузере (без ТГ), генерируем фейкового юзера
+                    this.user = { id: 123456789, first_name: 'Тестовий Користувач' };
+                }
+            } else {
+                 this.user = { id: 123456789, first_name: 'Browser User' };
+            }
+            
+            this.checkAuth();
+        },
+        computed: {
+            filteredProducts() {
+                return this.products.filter(p => p.category === this.selectedCategory);
+            },
+            totalItems() {
+                let sum = 0;
+                for (let id in this.cart) sum += this.cart[id];
+                return sum;
+            },
+            cartItems() {
+                const items = [];
+                for (let id in this.cart) {
+                    if (this.cart[id] > 0) {
+                        const product = this.products.find(p => p.id == id);
+                        if (product) items.push({ ...product, qty: this.cart[id] });
+                    }
+                }
+                return items.reverse(); 
+            }
+        },
+        methods: {
+            // --- АВТОРИЗАЦИЯ ---
+            async checkAuth() {
+                this.state = 'LOADING';
+                
+                if (USE_MOCK_DATA) {
+                    // Имитация задержки и успешного ответа
+                    setTimeout(() => {
+                        // Чтобы протестировать "Отказ доступа", поменяй authorized на false
+                        const mockResponse = { authorized: true, store: "Магазин №5 (Садова)" };
+                        
+                        if (mockResponse.authorized) {
+                            this.storeName = mockResponse.store;
+                            this.state = 'APP';
+                        } else {
+                            this.state = 'UNAUTHORIZED';
+                        }
+                    }, 1500);
+                    return;
+                }
+
+                // РЕАЛЬНЫЙ ЗАПРОС К N8N
+                try {
+                    const response = await fetch(`${N8N_BASE_URL}/auth`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ telegram_id: this.user.id, user_data: this.user })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.authorized) {
+                        this.storeName = data.store;
+                        this.state = 'APP';
+                    } else {
+                        this.state = 'UNAUTHORIZED';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('Помилка з\'єднання з сервером (n8n). Перевірте консоль.');
+                    this.state = 'UNAUTHORIZED'; // Или экран ошибки
+                }
+            },
+
+            // --- ЛОГИКА ЗАКАЗА ---
+            selectProduction(name) {
+                this.selectedProduction = name;
+                this.step = 2;
+            },
+            selectCategory(name) {
+                this.selectedCategory = name;
+                this.step = 3;
+            },
+            goBack() {
+                if (this.step === 3) this.step = 2;
+                else if (this.step === 2) this.step = 1;
+            },
+            addToCart(id, amount) {
+                if (!this.cart[id]) this.cart[id] = 0;
+                this.cart[id] += amount;
+                if (this.cart[id] < 0) this.cart[id] = 0;
+            },
+            removeFromCart(id) {
+                this.cart[id] = 0;
+            },
+            clearCart() {
+                if(confirm('Очистити кошик?')) {
+                    this.cart = {};
+                    this.isCartOpen = false;
+                    this.step = 1;
+                }
+            },
+            
+            async submitOrder() {
+                this.isSending = true;
+                
+                const orderData = {
+                    telegram_id: this.user.id,
+                    user_name: this.user.first_name,
+                    store: this.storeName,
+                    production: this.selectedProduction,
+                    items: this.cartItems.map(i => ({ name: i.name, qty: i.qty }))
+                };
+
+                if (USE_MOCK_DATA) {
+                    console.log("MOCK ORDER SENT:", orderData);
+                    setTimeout(() => {
+                        this.finishOrder();
+                    }, 1500);
+                    return;
+                }
+
+                // РЕАЛЬНАЯ ОТПРАВКА
+                try {
+                    await fetch(`${N8N_BASE_URL}/order`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(orderData)
+                    });
+                    this.finishOrder();
+                } catch (e) {
+                    alert('Помилка відправки!');
+                    this.isSending = false;
+                }
+            },
+            
+            finishOrder() {
+                this.notification.message = 'Замовлення прийнято!';
+                this.notification.show = true;
+                setTimeout(() => { this.notification.show = false }, 3000);
+                
+                this.cart = {};
+                this.isCartOpen = false;
+                this.isSending = false;
+                this.step = 1;
+            }
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>
