@@ -98,10 +98,9 @@
                     <!-- Инфо -->
                     <div class="flex flex-col truncate">
                         <div class="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                            <i class="fa-solid fa-store text-red-400"></i> {{ storeName }}
+                            <i class="fa-solid fa-store text-red-400"></i> {{ brandName }}
                         </div>
-                        <span v-if="selectedProduction" class="text-red-600 font-extrabold text-lg leading-none truncate">{{ selectedProduction }}</span>
-                        <span v-else class="text-gray-800 font-bold text-lg leading-none">Нове замовлення</span>
+                        <span class="text-red-600 font-extrabold text-lg leading-none truncate">{{ storeName }}</span>
                     </div>
                 </div>
                 <!-- Очистка -->
@@ -236,7 +235,8 @@
                 step: 1,
                 
                 user: { id: 0, first_name: 'Гість' }, // Данные юзера
-                storeName: '', // Название магазина из n8n
+                brandName: 'Галя Балувана',
+                storeName: 'Магазин "Компас"',
                 
                 productions: ['Гравітон', 'Садова', 'Флорида'],
                 categoriesList: [
@@ -399,10 +399,9 @@
                     // Имитация задержки и успешного ответа
                     setTimeout(() => {
                         // Чтобы протестировать "Отказ доступа", поменяй authorized на false
-                        const mockResponse = { authorized: true, store: "Магазин №5 (Садова)" };
-                        
+                        const mockResponse = { authorized: true };
+
                         if (mockResponse.authorized) {
-                            this.storeName = mockResponse.store;
                             this.state = 'APP';
                         } else {
                             this.state = 'UNAUTHORIZED';
@@ -419,9 +418,8 @@
                         body: JSON.stringify({ telegram_id: this.user.id, user_data: this.user })
                     });
                     const data = await response.json();
-                    
+
                     if (data.authorized) {
-                        this.storeName = data.store;
                         this.state = 'APP';
                     } else {
                         this.state = 'UNAUTHORIZED';
