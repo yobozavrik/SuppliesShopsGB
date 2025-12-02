@@ -61,35 +61,25 @@
     <div v-if="state === 'LOGIN'" class="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-red-50 to-white">
         <div class="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white font-bold text-3xl shadow-lg mb-8">Г</div>
         <h2 class="text-3xl font-extrabold text-gray-800 mb-2">Галя Балувана</h2>
-        <p class="text-gray-500 mb-8">Система замовлень для магазинів</p>
+        <p class="text-gray-500 mb-12">Система замовлень</p>
         
-        <div class="w-full max-w-sm bg-white p-6 rounded-3xl shadow-lg border border-red-100">
-            <label class="block text-sm font-bold text-gray-700 mb-2">Виберіть ваш магазин</label>
-            
-            <div class="mb-4 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                <div class="text-xs font-bold text-gray-600 mb-2 uppercase">Доступні магазини:</div>
-                <div class="space-y-1">
-                    <div v-for="store in stores" :key="store.code" class="text-xs text-gray-600 font-mono p-2 bg-white rounded border border-gray-100 cursor-pointer hover:bg-red-50" @click="password = `${store.code}-${store.name}`">
-                        <span class="font-bold text-red-600">{{ store.code }}</span>-{{ store.name }}
-                    </div>
-                </div>
-            </div>
-            
-            <label class="block text-sm font-bold text-gray-700 mb-3">Пароль</label>
+        <div class="w-full max-w-xs bg-white p-8 rounded-3xl shadow-lg border border-red-100">
+            <label class="block text-sm font-bold text-gray-700 mb-4">Код магазину</label>
             <input 
                 v-model="password" 
                 @keyup.enter="loginWithPassword"
                 type="text" 
-                placeholder="Приклад: 0001-Садгора"
+                placeholder="Приклад: 0001"
+                maxlength="4"
                 autocomplete="off"
-                class="w-full px-4 py-3 border border-gray-300 rounded-xl mb-1 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200 font-mono text-sm"
+                class="w-full px-4 py-4 border border-gray-300 rounded-xl mb-3 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200 font-mono text-lg text-center font-bold"
             />
-            <p v-if="loginError" class="text-red-600 text-xs font-bold mb-4">❌ {{ loginError }}</p>
+            <p v-if="loginError" class="text-red-600 text-xs font-bold mb-4 text-center">❌ {{ loginError }}</p>
             
             <button 
                 @click="loginWithPassword" 
                 :disabled="isLoggingIn || !password"
-                class="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white font-bold py-3 rounded-xl transition active:scale-95"
+                class="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-xl transition active:scale-95"
             >
                 <span v-if="!isLoggingIn">Увійти</span>
                 <span v-else><i class="fa-solid fa-spinner fa-spin"></i> Перевірка...</span>
@@ -280,7 +270,7 @@
                 
                 user: { id: 0, first_name: 'Гість' },
                 brandName: 'Галя Балувана',
-                storeName: 'Магазин "TEST"',
+                storeName: 'Магазин "Компас"',
                 storeId: null,
                 
                 // Для логина
@@ -294,7 +284,7 @@
                     { code: '0002', name: 'Руська', id: 'ruska' },
                     { code: '0003', name: 'Хотинська', id: 'hotinska' },
                     { code: '0004', name: 'Компас', id: 'kompas' },
-                    { code: '0005', name: 'Білоруська', id: 'bilorus' },
+                    { code: '0005', name: 'Лесогора', id: 'lesogora' },
                 ],
                 categoriesList: [
                     { name: 'Вареники', icon: '🥟' }, { name: 'Пельмені', icon: '🍲' }, { name: 'Млинці', icon: '🥞' },
@@ -448,15 +438,13 @@
             }
         },
         methods: {
-            // --- АВТОРИЗАЦИЯ ПО ПАРОЛЮ (ЛОКАЛЬНО) ---
+            // --- АВТОРИЗАЦИЯ ПО КОДУ МАГАЗИНА ---
             async loginWithPassword() {
                 this.isLoggingIn = true;
                 this.loginError = '';
                 
-                // Проверяем пароль в формате "0001-Садгора"
-                const store = this.stores.find(s => 
-                    this.password === `${s.code}-${s.name}`
-                );
+                // Проверяем пароль по коду (например "0001")
+                const store = this.stores.find(s => s.code === this.password);
 
                 if (store) {
                     console.log('✅ LOGIN SUCCESS:', store);
@@ -465,7 +453,7 @@
                     this.password = ''; // Очищаем пароль
                     this.state = 'APP';
                 } else {
-                    this.loginError = 'Невірний пароль. Приклад: 0001-Садгора';
+                    this.loginError = 'Невірний код магазину';
                 }
                 
                 this.isLoggingIn = false;
