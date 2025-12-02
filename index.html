@@ -57,11 +57,51 @@
 
 <div id="app" class="app-shell max-w-md mx-auto bg-white min-h-screen shadow-2xl flex flex-col relative overflow-hidden">
 
+    <!-- ==================== ЭКРАН ВХОДА ==================== -->
+    <div v-if="state === 'LOGIN'" class="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-red-50 to-white">
+        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white font-bold text-3xl shadow-lg mb-8">Г</div>
+        <h2 class="text-3xl font-extrabold text-gray-800 mb-2">Галя Балувана</h2>
+        <p class="text-gray-500 mb-8">Система замовлень для магазинів</p>
+        
+        <div class="w-full max-w-sm bg-white p-6 rounded-3xl shadow-lg border border-red-100">
+            <label class="block text-sm font-bold text-gray-700 mb-2">Виберіть ваш магазин</label>
+            
+            <div class="mb-4 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <div class="text-xs font-bold text-gray-600 mb-2 uppercase">Доступні магазини:</div>
+                <div class="space-y-1">
+                    <div v-for="store in stores" :key="store.code" class="text-xs text-gray-600 font-mono p-2 bg-white rounded border border-gray-100 cursor-pointer hover:bg-red-50" @click="password = `${store.code}-${store.name}`">
+                        <span class="font-bold text-red-600">{{ store.code }}</span>-{{ store.name }}
+                    </div>
+                </div>
+            </div>
+            
+            <label class="block text-sm font-bold text-gray-700 mb-3">Пароль</label>
+            <input 
+                v-model="password" 
+                @keyup.enter="loginWithPassword"
+                type="text" 
+                placeholder="Приклад: 0001-Садгора"
+                autocomplete="off"
+                class="w-full px-4 py-3 border border-gray-300 rounded-xl mb-1 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-200 font-mono text-sm"
+            />
+            <p v-if="loginError" class="text-red-600 text-xs font-bold mb-4">❌ {{ loginError }}</p>
+            
+            <button 
+                @click="loginWithPassword" 
+                :disabled="isLoggingIn || !password"
+                class="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white font-bold py-3 rounded-xl transition active:scale-95"
+            >
+                <span v-if="!isLoggingIn">Увійти</span>
+                <span v-else><i class="fa-solid fa-spinner fa-spin"></i> Перевірка...</span>
+            </button>
+        </div>
+    </div>
+
     <!-- ==================== ЭКРАН ЗАГРУЗКИ ==================== -->
     <div v-if="state === 'LOADING'" class="flex-1 flex flex-col items-center justify-center bg-white z-50">
         <div class="loader mb-4"></div>
-        <h2 class="text-gray-600 font-bold animate-pulse">Авторизація...</h2>
-        <p class="text-xs text-gray-400 mt-2">Перевіряємо ваші права доступу</p>
+        <h2 class="text-gray-600 font-bold animate-pulse">Завантаження...</h2>
+        <p class="text-xs text-gray-400 mt-2">Підготовка до роботи</p>
     </div>
 
     <!-- ==================== ЭКРАН: НЕТ ДОСТУПА ==================== -->
@@ -106,6 +146,10 @@
                 <!-- Очистка -->
                 <button v-if="totalItems > 0" @click="clearCart" class="text-gray-400 hover:text-red-500 transition p-2">
                     <i class="fa-regular fa-trash-can text-xl"></i>
+                </button>
+                <!-- Кнопка выхода -->
+                <button v-else @click="logout" class="text-gray-400 hover:text-red-500 transition p-2" title="Вихід">
+                    <i class="fa-solid fa-sign-out-alt text-xl"></i>
                 </button>
             </div>
         </div>
@@ -231,14 +275,27 @@
     createApp({
         data() {
             return {
-                state: 'LOADING', // 'LOADING' | 'UNAUTHORIZED' | 'APP'
+                state: 'LOGIN', // 'LOGIN' | 'LOADING' | 'APP'
                 step: 1,
                 
-                user: { id: 0, first_name: 'Гість' }, // Данные юзера
+                user: { id: 0, first_name: 'Гість' },
                 brandName: 'Галя Балувана',
-                storeName: 'Магазин "Компас"',
+                storeName: 'Магазин "TEST"',
+                storeId: null,
                 
-                productions: ['Гравітон', 'Садова', 'Флорида'],
+                // Для логина
+                password: '',
+                loginError: '',
+                isLoggingIn: false,
+                
+                // Базовые данные магазинов
+                stores: [
+                    { code: '0001', name: 'Садгора', id: 'sadgora' },
+                    { code: '0002', name: 'Руська', id: 'ruska' },
+                    { code: '0003', name: 'Хотинська', id: 'hotinska' },
+                    { code: '0004', name: 'Компас', id: 'kompas' },
+                    { code: '0005', name: 'Білоруська', id: 'bilorus' },
+                ],
                 categoriesList: [
                     { name: 'Вареники', icon: '🥟' }, { name: 'Пельмені', icon: '🍲' }, { name: 'Млинці', icon: '🥞' },
                     { name: 'Бендерики', icon: '🥪' }, { name: 'Котлети', icon: '🍖' }, { name: 'Сирники', icon: '🍩' },
@@ -368,7 +425,7 @@
                  this.user = { id: 123456789, first_name: 'Browser User' };
             }
             
-            this.checkAuth();
+            this.state = 'LOGIN';
         },
         computed: {
             filteredProducts() {
@@ -391,14 +448,27 @@
             }
         },
         methods: {
-            // --- АВТОРИЗАЦИЯ ---
-            async checkAuth() {
-                this.state = 'LOADING';
+            // --- АВТОРИЗАЦИЯ ПО ПАРОЛЮ (ЛОКАЛЬНО) ---
+            async loginWithPassword() {
+                this.isLoggingIn = true;
+                this.loginError = '';
                 
-                // Временно отключаем авторизацию для тестирования
-                setTimeout(() => {
+                // Проверяем пароль в формате "0001-Садгора"
+                const store = this.stores.find(s => 
+                    this.password === `${s.code}-${s.name}`
+                );
+
+                if (store) {
+                    console.log('✅ LOGIN SUCCESS:', store);
+                    this.storeName = store.name;
+                    this.storeId = store.id;
+                    this.password = ''; // Очищаем пароль
                     this.state = 'APP';
-                }, 500);
+                } else {
+                    this.loginError = 'Невірний пароль. Приклад: 0001-Садгора';
+                }
+                
+                this.isLoggingIn = false;
             },
 
             // --- ЛОГИКА ЗАКАЗА ---
@@ -429,14 +499,23 @@
                     this.step = 1;
                 }
             },
+
+            // --- ВЫХОД ---
+            logout() {
+                this.state = 'LOGIN';
+                this.password = '';
+                this.storeName = 'Магазин "Компас"';
+                this.storeId = null;
+                this.cart = {};
+                this.step = 1;
+            },
             
             async submitOrder() {
                 this.isSending = true;
                 
                 const orderData = {
-                    telegram_id: this.user.id,
-                    user_name: this.user.first_name,
-                    store: this.storeName,
+                    store_id: this.storeId,
+                    store_name: this.storeName,
                     production: this.selectedProduction,
                     items: this.cartItems.map(i => ({ name: i.name, qty: i.qty }))
                 };
